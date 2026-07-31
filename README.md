@@ -34,6 +34,14 @@ make build          # produces ./bin/aegisheet with version metadata
 go install github.com/Redpatronus/AegiSheet/cmd/aegisheet@latest
 ```
 
+A container image is published for tagged releases, and can be built locally:
+
+```sh
+docker pull ghcr.io/redpatronus/aegisheet:latest
+# or
+make docker
+```
+
 ## Quick start
 
 ```sh
@@ -55,6 +63,52 @@ Useful before a real run:
 aegisheet -config conf/mine.ini -print-config   # how the layers resolved
 aegisheet -config conf/mine.ini -dry-run        # run every report, write nothing
 ```
+
+## Container image
+
+The image is built from `distroless/static`: it contains the binary, CA
+certificates and nothing else — no shell, no package manager, no libc — and runs
+as the unprivileged user 65532. It is about 7 MB and currently scans clean.
+
+Mount the configuration and credentials read-only, and a directory for the
+report read-write:
+
+```sh
+docker run --rm \
+  -v "$PWD/conf/mine.ini:/etc/aegisheet/report.ini:ro" \
+  -v "$PWD/sa.json:/etc/aegisheet/sa.json:ro" \
+  -v "$PWD/out:/data" \
+  ghcr.io/redpatronus/aegisheet:latest \
+    -config /etc/aegisheet/report.ini \
+    -service-account /etc/aegisheet/sa.json \
+    -impersonate workspace-admin@example.com \
+    -output /data/report.xlsx \
+    -log-format json -non-interactive
+```
+
+Notes for deployment:
+
+- `/data` is the working directory and is writable by the runtime user. Mount a
+  volume over it, owned by uid 65532, to keep the report after the container
+  exits.
+- Every setting also has an `AEGISHEET_*` environment variable, which is usually
+  the more natural way to configure a container (see `-print-config`).
+- Use `-service-account` (or `-use-adc`): the interactive OAuth flow needs a
+  terminal that a container does not have. `-non-interactive` makes that failure
+  immediate and explicit.
+- The image runs `-h` when given no arguments, so `docker run … aegisheet` with
+  no flags explains itself instead of failing.
+- Under Kubernetes the image satisfies `runAsNonRoot` with a numeric user, and
+  needs no writable root filesystem beyond the mounted output volume:
+
+  ```yaml
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities: { drop: ["ALL"] }
+  ```
 
 ## Configuration
 
@@ -207,10 +261,47 @@ internal/buildinfo   build identity
 ## Development
 
 ```sh
-make check      # gofmt, go vet, tests with the race detector
-make test
-make build
+make check          # everything CI runs: format, vet, lint, tests, security
+make test           # tests with the race detector
+make lint           # golangci-lint, configured in .golangci.yml
+make security       # govulncheck and gosec
+make docker-scan    # build the image and scan it with Trivy
+make help           # every target
 ```
+
+Every tool is invoked through `go run tool@version` (or a pinned container), so
+there is nothing to install first, and the versions in the `Makefile` match the
+ones in the workflows — a local `make check` and a CI run reach the same verdict.
+
+### Checks in CI
+
+| Workflow | Job | What it enforces |
+| --- | --- | --- |
+| `go.yml` | Build and test | `go mod tidy -diff`, `go mod verify`, gofmt, `go vet`, race tests, coverage |
+| `go.yml` | Lint | `golangci-lint` with ~40 linters (see `.golangci.yml`) |
+| `go.yml` | Security scan | `govulncheck` against the Go vulnerability database, `gosec` (uploaded as SARIF) |
+| `go.yml` | Cross build | linux/amd64, linux/arm64, darwin/arm64, windows/amd64 |
+| `docker.yml` | Build and scan | image build, `-version`/`-list-tasks` smoke test, non-root assertion, Trivy scan |
+
+The lint selection is deliberately stricter than the default: it includes
+`errorlint` and `nilerr` (error handling that breaks `errors.Is`), `noctx` and
+`contextcheck` (requests made without a context), `bodyclose`, `sloglint` (log
+attribute keys must be snake_case, and `slog.Attr` values must not be mixed with
+loose key/value pairs), and `unparam`. Suppressions must be specific and carry an
+explanation, which `nolintlint` enforces.
+
+Two source-level scanner findings are suppressed in code, each with its reason at
+the suppression site: jitter in the retry backoff uses `math/rand` because it is a
+scheduling nudge rather than a secret, and the OAuth token is deliberately
+serialised to disk (into a file created with mode `0600`) because that is what a
+token cache is. Operator-supplied file paths account for the rest; a CLI has to
+be able to open the files it is pointed at.
+
+`govulncheck` currently reports one advisory for a module in the dependency graph
+(`golang.org/x/crypto/openpgp`, reached only through the spreadsheet library's
+workbook-encryption code). It has no fixed version, and nothing in AegiSheet
+calls it, so the scan passes: the check fails only when vulnerable code is
+genuinely reachable.
 
 ## Upgrading from `gsreport`
 

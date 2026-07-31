@@ -2,6 +2,7 @@ package xlsx
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,7 +164,7 @@ func TestRowsAreWrittenSequentiallyWithoutOverwriting(t *testing.T) {
 }
 
 func cellValue(index int) string {
-	return "user" + string(rune('a'+index%26)) + "-" + string(rune('0'+index/26)) + "@example.com"
+	return fmt.Sprintf("user%03d@example.com", index)
 }
 
 func TestLimitRowsTruncatesAndReports(t *testing.T) {

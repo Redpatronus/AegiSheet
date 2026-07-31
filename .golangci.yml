@@ -1,0 +1,166 @@
+# golangci-lint configuration (schema v2).
+#
+# The selection below is deliberately stricter than the default five linters. The
+# emphasis is on the mistakes that actually bite this codebase: unchecked errors
+# around file and API calls, error wrapping that breaks errors.Is, requests made
+# without a context, inconsistent log attribute keys, and dead configuration
+# knobs. Style linters that would only churn the diff are left out.
+#
+# Run with: make lint
+version: "2"
+
+run:
+  # Tests are linted too: they are the executable specification of the report
+  # invariants and deserve the same scrutiny.
+  tests: true
+
+linters:
+  # The standard set is errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+
+  enable:
+    - asasalint       # []any accidentally passed as a single variadic argument
+    - asciicheck      # non-ASCII identifiers, which are usually a copy-paste accident
+    - bidichk         # bidirectional unicode that can hide code from a reviewer
+    - bodyclose       # HTTP response bodies that are never closed
+    - contextcheck    # functions that should take a context but do not
+    - durationcheck   # multiplying two durations, which is almost never intended
+    - errname         # error types and sentinels named to convention
+    - errorlint       # comparisons and format verbs that break errors.Is/As
+    - exhaustive      # switches over our own enum-like types that miss a case
+    - forcetypeassert # unchecked type assertions
+    - gocheckcompilerdirectives # malformed //go: directives that silently do nothing
+    - gochecknoinits  # init() hides ordering dependencies; the registry is explicit instead
+    - gocritic        # a broad correctness and readability set
+    - goconst         # repeated literals that belong in a constant
+    - gosec           # the security scanner, also run standalone in CI
+    - iface           # redundant or unused interface abstractions
+    - intrange        # loops that can use Go 1.22 integer ranges
+    - lll             # line length, to keep review diffs readable
+    - misspell        # genuine spelling errors in comments and strings
+    - nakedret        # naked returns in long functions
+    - nilerr          # returning nil after checking a non-nil error
+    - nilnesserr      # returning a nil error where a non-nil one was expected
+    - noctx           # HTTP requests sent without a context
+    - nolintlint      # every suppression must be specific and explained
+    - perfsprint      # fmt.Sprintf where a cheaper conversion exists
+    - predeclared     # shadowing predeclared identifiers such as len or new
+    - reassign        # reassigning package-level variables of imported packages
+    - revive          # the general-purpose style and correctness set
+    - sloglint        # consistent structured logging
+    - thelper         # test helpers that forget t.Helper()
+    - tparallel       # inconsistent use of t.Parallel()
+    - unconvert       # redundant type conversions
+    - unparam         # parameters and results that are always the same value
+    - usestdlibvars   # magic strings where the standard library has a constant
+    - wastedassign    # assignments that are never read
+    - whitespace      # stray leading and trailing blank lines in blocks
+
+  settings:
+    errcheck:
+      # Deliberately ignored errors are written as `_ = f()`; the linter should
+      # still flag them so that each one is a conscious choice.
+      check-blank: false
+
+    govet:
+      enable-all: true
+      disable:
+        # Field alignment optimises struct padding at the cost of grouping related
+        # fields together. Readability wins for configuration structs.
+        - fieldalignment
+        # `shadow` flags `if err := f(); err != nil` whenever an outer err exists,
+        # which is the standard Go idiom and the reason go vet itself leaves this
+        # check off by default. Renaming every inner err to satisfy it would make
+        # the code worse, not safer.
+        - shadow
+
+    exhaustive:
+      # A default branch is an exhaustive handling of the remaining cases.
+      default-signifies-exhaustive: true
+
+    goconst:
+      min-len: 4
+      min-occurrences: 4
+      ignore-tests: true
+
+    lll:
+      # Slightly above the 100 columns the source targets, so that a long error
+      # message or struct tag does not force an awkward wrap.
+      line-length: 120
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+
+    sloglint:
+      # Attribute keys are snake_case everywhere, which is what makes them
+      # queryable in a log aggregator, and what the redaction rules key off.
+      key-naming-case: snake
+      # Mixing slog.Attr values with loose key/value pairs in one call is the
+      # easiest way to produce a silently malformed record.
+      no-mixed-args: true
+
+    staticcheck:
+      checks:
+        - all
+        # ST1000 wants a specific package comment form; the package comments here
+        # are longer prose that explains design decisions, which is more useful.
+        - -ST1000
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Tests exercise the logging rules with deliberately malformed attribute
+      # keys ("userEmail", "user-email") and repeat literals for clarity.
+      - path: _test\.go
+        linters:
+          - sloglint
+          - goconst
+          - lll
+          - perfsprint
+          - unparam
+          - contextcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      # Keep this module's imports in their own group, after the third-party ones.
+      local-prefixes:
+        - github.com/Redpatronus/AegiSheet

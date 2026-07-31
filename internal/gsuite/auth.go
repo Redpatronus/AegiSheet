@@ -314,7 +314,7 @@ func parseAuthorizationResponse(input string) (code, state string, err error) {
 
 	// Otherwise treat the input as the code itself.
 	if strings.ContainsAny(trimmed, " \t") {
-		return "", "", fmt.Errorf("the authorisation code contains whitespace; paste it without line breaks")
+		return "", "", errors.New("the authorisation code contains whitespace; paste it without line breaks")
 	}
 	return trimmed, "", nil
 }
@@ -340,6 +340,11 @@ func loadToken(path string, log *slog.Logger) (*oauth2.Token, error) {
 	}
 	warnIfPermissive(path, info.Mode(), "OAuth token", log)
 
+	// The path comes from this operator's own flag, environment or configuration
+	// file, which are all inputs they already control completely; there is no
+	// untrusted source to traverse out of, and constraining a CLI's file arguments
+	// to a fixed root would break every legitimate deployment layout.
+	// #nosec G304 -- operator-supplied path, by design
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read token file %s: %w", path, err)
@@ -363,6 +368,11 @@ func saveToken(path string, token *oauth2.Token) error {
 	if path == "" {
 		return errors.New("no token file configured")
 	}
+	// Serialising the secret is the entire purpose of a token cache: without the
+	// refresh component on disk, every scheduled run would need a human. The
+	// exposure is controlled by where it lands, not by whether it is written —
+	// writeFileAtomic creates the file with mode 0600 before any bytes reach it.
+	// #nosec G117 -- persisting the token is the intended behaviour; see tokenFileMode
 	data, err := json.MarshalIndent(token, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode token: %w", err)
@@ -390,6 +400,9 @@ func readCredentialFile(path string, log *slog.Logger) ([]byte, error) {
 	}
 	warnIfPermissive(path, info.Mode(), "credential", log)
 
+	// Operator-supplied path, as above. The size was bounded before opening, so a
+	// mistyped path cannot make the process read something enormous.
+	// #nosec G304 -- operator-supplied path, by design
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read credential file %s: %w", path, err)
@@ -407,7 +420,7 @@ func warnIfPermissive(path string, mode fs.FileMode, kind string, log *slog.Logg
 			slog.String("path", path),
 			slog.String("kind", kind),
 			slog.String("mode", fmt.Sprintf("0%o", mode.Perm())),
-			slog.String("remedy", fmt.Sprintf("chmod 600 %s", path)))
+			slog.String("remedy", "chmod 600 "+path))
 	}
 }
 

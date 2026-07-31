@@ -228,7 +228,7 @@ func TestFanOutSummarisesLargeFailureCounts(t *testing.T) {
 	// Thousands of joined errors would swamp the log.
 	items := make([]int, 40)
 	_, err := fanOut(context.Background(), items, 4, logging.Discard(),
-		func(_ context.Context, item int) ([]string, error) {
+		func(context.Context, int) ([]string, error) {
 			return nil, errors.New("unavailable")
 		})
 	if err == nil {

@@ -1,0 +1,43 @@
+# Keep the supply chain current without manual watching.
+#
+# This matters more than usual here: the tool holds credentials that can read an
+# entire Workspace directory, so an unpatched dependency in the HTTP or OAuth path
+# is a real exposure rather than a theoretical one.
+version: 2
+
+updates:
+  # Go modules.
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch updates rarely need individual review; batching them keeps the queue
+      # short enough that the interesting updates stay visible.
+      go-patch:
+        update-types: [patch]
+    labels:
+      - dependencies
+      - go
+
+  # The actions used by the workflows, pinned to major tags.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+
+  # The build and runtime base images.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - docker

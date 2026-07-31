@@ -182,7 +182,7 @@ func TestRunAbandonsOnCancellationEvenWithoutFailFast(t *testing.T) {
 			cancel()
 			return context.Canceled
 		},
-		config.TaskAdmins: func(ctx context.Context, run *tasks.Run) error {
+		config.TaskAdmins: func(context.Context, *tasks.Run) error {
 			secondRan = true
 			return nil
 		},
