@@ -27,9 +27,11 @@
 # ---------------------------------------------------------------------------
 # Build stage
 # ---------------------------------------------------------------------------
-# The tag is pinned to a minor release so that patch updates arrive with a
-# rebuild while the language version stays predictable. go.mod requires Go 1.25
-# or newer.
+# Pinned to a minor release so that patch updates — which is how standard library
+# advisories are fixed — arrive with a rebuild, while the language version stays
+# predictable. This is deliberately ahead of the floor declared in go.mod: the
+# floor is the oldest toolchain that is safe to build with, not the one a release
+# artefact should be built with.
 FROM golang:1.26-alpine AS build
 
 # Build metadata, injected at link time so the running container can identify

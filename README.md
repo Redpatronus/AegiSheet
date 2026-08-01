@@ -26,7 +26,10 @@ accepted for backwards compatibility.
 
 ## Install
 
-Requires Go 1.25 or newer.
+Requires Go 1.25.12 or newer. The patch level is part of the requirement:
+earlier releases of the 1.25 line carry standard library advisories in the TLS
+and HTTP paths this tool uses, so `go.mod` declares the fixed version and the Go
+toolchain enforces it.
 
 ```sh
 make build          # produces ./bin/aegisheet with version metadata
@@ -297,11 +300,24 @@ serialised to disk (into a file created with mode `0600`) because that is what a
 token cache is. Operator-supplied file paths account for the rest; a CLI has to
 be able to open the files it is pointed at.
 
-`govulncheck` currently reports one advisory for a module in the dependency graph
-(`golang.org/x/crypto/openpgp`, reached only through the spreadsheet library's
-workbook-encryption code). It has no fixed version, and nothing in AegiSheet
-calls it, so the scan passes: the check fails only when vulnerable code is
-genuinely reachable.
+### Vulnerability scanning and the toolchain floor
+
+`govulncheck` evaluates the standard library of the toolchain that builds the
+code, not just this module's dependencies. That makes the `go` directive in
+`go.mod` a security control rather than a compatibility note: whatever version it
+names is the version everyone building from source gets, so it has to be a patched
+one. The security job therefore scans with that floor deliberately — scanning only
+the newest Go would report a clean result while leaving source builds vulnerable.
+
+**When a standard library advisory appears, raise the `go` directive** to the
+patch release that carries the fix (the advisory states it), then run
+`make vuln` to confirm. The build-and-test job runs against both that floor and
+the latest stable release, so a bump is exercised on both before it merges.
+
+One module-level advisory is reported as informational and does not fail the
+scan: `golang.org/x/crypto/openpgp`, reached only through the spreadsheet
+library's workbook-encryption code. It has no fixed version, and nothing here
+calls it. The check fails only when vulnerable code is genuinely reachable.
 
 ## Upgrading from `gsreport`
 
