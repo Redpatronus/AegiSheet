@@ -281,8 +281,8 @@ func (s *Sheet) Truncated() bool { return s.truncated }
 
 // LimitRows caps the number of data rows this sheet accepts. Appends past the cap
 // are dropped and flagged via Truncated. Zero (the default) means unlimited.
-func (s *Sheet) LimitRows(max int) {
-	s.maxRows = max
+func (s *Sheet) LimitRows(limit int) {
+	s.maxRows = limit
 }
 
 // Full reports whether the row cap has been reached, which lets a task stop

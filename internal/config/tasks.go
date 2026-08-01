@@ -17,9 +17,10 @@ type TaskID string
 
 // The canonical task identifiers.
 const (
-	TaskUsersWithout2FA  TaskID = "users-without-2fa"
-	TaskSuspendedUsers   TaskID = "suspended-users"
-	TaskAdmins           TaskID = "admins"
+	TaskUsersWithout2FA TaskID = "users-without-2fa"
+	TaskSuspendedUsers  TaskID = "suspended-users"
+	TaskAdmins          TaskID = "admins"
+	// #nosec G101 -- a report identifier that happens to contain "password", not a credential
 	TaskAppPasswords     TaskID = "app-specific-passwords"
 	TaskGroups           TaskID = "groups"
 	TaskGroupMembers     TaskID = "group-members"

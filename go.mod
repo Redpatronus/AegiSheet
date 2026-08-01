@@ -1,7 +1,14 @@
 module github.com/Redpatronus/AegiSheet
 
-// Go 1.25 is the floor imposed by github.com/xuri/excelize/v2 v2.11.x.
-go 1.25.0
+// The 1.25 line is the floor imposed by github.com/xuri/excelize/v2 v2.11.x.
+//
+// The patch level is part of the requirement, not decoration: releases before
+// 1.25.12 carry standard library advisories that this program reaches through
+// ordinary HTTPS traffic to Google — GO-2026-5856 (crypto/tls) and GO-2026-5039
+// (net/textproto). Declaring the patch here means `go build` either uses a fixed
+// toolchain or fetches one, instead of quietly producing a vulnerable binary.
+// Raise this floor whenever govulncheck reports a new standard library advisory.
+go 1.25.12
 
 require (
 	github.com/xuri/excelize/v2 v2.11.0

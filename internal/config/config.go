@@ -337,7 +337,7 @@ func Load(args []string, getenv func(string) string, out io.Writer) (*Config, er
 	cfg.API.UserAgent = buildinfo.Get().UserAgent()
 
 	// Report sections come from the file only.
-	specs, warnings, err := parseTaskSections(file, cfg)
+	specs, warnings, err := parseTaskSections(file)
 	if err != nil {
 		return nil, err
 	}
@@ -397,6 +397,9 @@ func (c *Config) Validate() error {
 		if c.Auth.TokenFile == "" {
 			errs = append(errs, errors.New("-token is required with -credentials: the OAuth token needs a cache location"))
 		}
+	case AuthModeADC:
+		// Application Default Credentials are supplied by the runtime, so there is
+		// nothing here for the configuration to get wrong.
 	}
 
 	// --- API ---------------------------------------------------------------

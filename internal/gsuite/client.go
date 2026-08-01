@@ -15,6 +15,7 @@ package gsuite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -46,7 +47,7 @@ func NewServices(
 	log *slog.Logger,
 ) (*Services, error) {
 	if client == nil {
-		return nil, fmt.Errorf("an authenticated HTTP client is required")
+		return nil, errors.New("an authenticated HTTP client is required")
 	}
 
 	// One retry policy is shared by both endpoints: they draw on the same

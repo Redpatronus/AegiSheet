@@ -6,6 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege by default. Individual jobs widen this only where they must.
 permissions:
   contents: read
 
@@ -14,23 +15,54 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Tool versions live here so that all jobs move together and a bump is one edit.
+  # The vulnerability database is always fetched fresh at run time; only the
+  # scanner binary is pinned.
+  GOLANGCI_LINT_VERSION: v2.12.2
+  GOSEC_VERSION: v2.28.0
+  GOVULNCHECK_VERSION: v1.6.0
+
 jobs:
-  check:
-    name: Build and test
+  build:
+    name: Build and test (${{ matrix.label }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two toolchains, because they answer different questions.
+        include:
+          # The floor declared in go.mod: what someone building from source gets,
+          # and the version the security job evaluates. Running the tests here is
+          # what catches code that quietly depends on a newer language version.
+          - label: floor
+            go-version-file: go.mod
+          # The newest release, which is what the container image is built with.
+          # Catches regressions introduced by a new toolchain before they reach a
+          # release build.
+          - label: stable
+            go-version: stable
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          # Read the version from go.mod so the toolchain cannot drift from what
-          # the module declares.
-          go-version-file: go.mod
+          # Exactly one of these is set per matrix entry; the other resolves to an
+          # empty string and is ignored.
+          go-version: ${{ matrix.go-version }}
+          go-version-file: ${{ matrix.go-version-file }}
+          # Resolve the version freshly rather than accepting whichever patch
+          # release happens to be baked into the runner image. A stale patch is
+          # how a fixed standard library advisory comes back to life in CI.
+          check-latest: true
           cache: true
 
-      - name: Verify the module graph is tidy
+      - name: Report the toolchain in use
+        run: go version
+
+      - name: Verify the module graph is tidy and unmodified
         run: |
           go mod download
           go mod verify
@@ -54,8 +86,93 @@ jobs:
       - name: Coverage summary
         run: go tool cover -func=coverage.out | tail -1
 
+      - name: Upload the coverage profile
+        uses: actions/upload-artifact@v7
+        with:
+          # Suffixed with the toolchain, since both matrix entries upload one.
+          name: coverage-${{ matrix.label }}
+          path: coverage.out
+          retention-days: 14
+
       - name: Build
         run: go build -trimpath ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      # The configuration lives in .golangci.yml, so the same rules apply here and
+      # on a developer's machine via `make lint`.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=5m
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Needed to publish the gosec findings to the repository's Security tab.
+      security-events: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          # Deliberately the floor from go.mod rather than the newest release.
+          # govulncheck evaluates the standard library of the toolchain in use, so
+          # scanning the floor is what proves the version this project *claims* to
+          # support is actually safe to build with. Scanning only the newest Go
+          # would hide a vulnerable floor from everyone building from source.
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Report the toolchain in use
+        run: go version
+
+      # govulncheck compares the packages this module actually calls against the
+      # Go vulnerability database, including the standard library of the toolchain
+      # above. Advisories for modules that are only required transitively, without
+      # any reachable call, are reported as informational; the command exits
+      # non-zero only when vulnerable code is genuinely reachable from this binary.
+      #
+      # A standard library finding here is fixed by raising the go directive in
+      # go.mod to the patch release that carries the fix.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+          govulncheck ./...
+
+      - name: gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@${GOSEC_VERSION}
+          gosec -fmt=sarif -out=gosec.sarif -stdout -verbose=text ./...
+
+      # Publishing to the Security tab needs GitHub Advanced Security, which is
+      # not enabled on every private repository. The scan above already fails the
+      # job on a finding, so a rejected upload must not turn a clean scan red.
+      - name: Publish the gosec findings
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gosec.sarif
+          category: gosec
 
   cross-build:
     name: Cross build
@@ -76,12 +193,13 @@ jobs:
             goarch: amd64
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          check-latest: true
           cache: true
 
       - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}

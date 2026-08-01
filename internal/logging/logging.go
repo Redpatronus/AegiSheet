@@ -186,6 +186,10 @@ func openSink(output string) (io.Writer, io.Closer, error) {
 			return nil, nil, fmt.Errorf("create log directory %s: %w", dir, err)
 		}
 	}
+	// The destination is whatever the operator asked for via -log-file; it is their
+	// own input, not an untrusted one, and a log file has to be allowed to live
+	// wherever their deployment keeps logs.
+	// #nosec G304 -- operator-supplied path, by design
 	f, err := os.OpenFile(output, os.O_APPEND|os.O_CREATE|os.O_WRONLY, LogFileMode)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open log file %s: %w", output, err)

@@ -109,7 +109,7 @@ func applyINIGlobals(cfg *Config, file *ini.File, table []setting) error {
 //     plausible-looking sheet containing the wrong data.
 //   - An unrecognised task name is a hard error listing the valid names, for the
 //     same reason.
-func parseTaskSections(file *ini.File, cfg *Config) ([]TaskSpec, []string, error) {
+func parseTaskSections(file *ini.File) ([]TaskSpec, []string, error) {
 	var (
 		specs    []TaskSpec
 		warnings []string

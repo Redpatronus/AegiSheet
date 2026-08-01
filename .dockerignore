@@ -1,0 +1,33 @@
+# Allowlist rather than denylist.
+#
+# Everything is excluded first and only what the build genuinely needs is added
+# back. A denylist would eventually leak something: this repository is worked on
+# beside real credential files (credentials.json, service-account keys, token.json)
+# and generated reports full of personal data, and any of those landing in the
+# build context would end up readable in the image history.
+*
+
+# Module graph.
+!go.mod
+!go.sum
+
+# Application source. Test files are matched by the directory rules but are not
+# compiled into the binary.
+!cmd/
+!internal/
+
+# The example configuration, shipped as documentation inside the image.
+!conf/xls_report.ini
+
+# Re-exclude anything sensitive or bulky that the rules above might have pulled in.
+**/*_test.go
+**/testdata/
+**/*.xlsx
+**/*.xls
+**/*.log
+**/token.json
+**/credentials.json
+**/client_secret*.json
+**/service-account*.json
+**/*.pem
+**/*.p12

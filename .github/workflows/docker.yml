@@ -1,0 +1,123 @@
+name: Docker
+
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned so that a scanner update never turns a green build red without an
+  # explicit bump. The vulnerability database itself is fetched fresh each run.
+  TRIVY_VERSION: "0.72.0"
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build and scan the image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Only used by the publish step below, which runs for tags only.
+      packages: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Tags and OCI labels are derived from the git ref: a tag v1.2.3 produces
+      # 1.2.3, 1.2 and latest; a branch push produces the branch name and sha.
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=AegiSheet
+            org.opencontainers.image.description=Google Workspace administrative reporting to Excel
+
+      # Build for the local daemon first so the image can be scanned and smoke
+      # tested before anything is published.
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: aegisheet:ci
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version || github.ref_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A container that cannot report its own version is broken in a way no unit
+      # test would catch: a bad entrypoint, a missing library, a wrong architecture.
+      - name: Smoke test the image
+        run: |
+          docker run --rm aegisheet:ci -version
+          docker run --rm aegisheet:ci -list-tasks > /dev/null
+          # The image must not run as root: the reports contain personal data and
+          # the container has no reason to hold any privilege.
+          user=$(docker image inspect aegisheet:ci --format '{{.Config.User}}')
+          if [ "$user" != "65532:65532" ]; then
+            echo "the image runs as '$user', expected the unprivileged 65532:65532"
+            exit 1
+          fi
+
+      - name: Scan the image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: aegisheet:ci
+          format: table
+          exit-code: "1"
+          # Unfixed findings in the base image cannot be actioned here; a base
+          # image bump is what resolves them, and Dependabot proposes those.
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          version: v${{ env.TRIVY_VERSION }}
+
+      # Publishing is deliberately restricted to tags: a release is an explicit
+      # act, so no ordinary push or pull request can put an image in the registry.
+      - name: Log in to the container registry
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the release image
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          # Built for both architectures only at release time; a multi-platform
+          # build cannot be loaded into the local daemon for the checks above.
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -38,20 +38,20 @@ type Retrier struct {
 
 // NewRetrier builds a Retrier from the operator-facing settings, where the
 // configured value is the number of *retries* rather than of attempts.
-func NewRetrier(maxRetries int, base, max time.Duration, log *slog.Logger) *Retrier {
+func NewRetrier(maxRetries int, base, maxDelay time.Duration, log *slog.Logger) *Retrier {
 	if maxRetries < 0 {
 		maxRetries = 0
 	}
 	if base <= 0 {
 		base = 500 * time.Millisecond
 	}
-	if max < base {
-		max = base
+	if maxDelay < base {
+		maxDelay = base
 	}
 	return &Retrier{
 		MaxAttempts: maxRetries + 1,
 		BaseDelay:   base,
-		MaxDelay:    max,
+		MaxDelay:    maxDelay,
 		log:         log,
 	}
 }
@@ -104,7 +104,10 @@ func (r *Retrier) Do(ctx context.Context, operation string, fn func(context.Cont
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return fmt.Errorf("%s: %w (last failure: %v)", operation, ctx.Err(), lastErr)
+			// Both errors are wrapped: a caller needs errors.Is to recognise the
+			// cancellation, and the underlying API failure is what explains why the
+			// call was still being retried when the run ended.
+			return fmt.Errorf("%s: %w (last failure: %w)", operation, ctx.Err(), lastErr)
 		case <-timer.C:
 		}
 	}
@@ -136,6 +139,11 @@ func (r *Retrier) nextDelay(attempt int, err error) time.Duration {
 	if half <= 0 {
 		return delay
 	}
+	// math/rand is the correct generator here and crypto/rand would be the wrong
+	// one: the value is a timing nudge that desynchronises concurrent retries, not
+	// a secret, and nothing about the run's security depends on it being
+	// unpredictable. It is also drawn on every retry of every call.
+	// #nosec G404 -- backoff jitter is a scheduling concern, not a security one
 	return half + time.Duration(rand.Int64N(int64(half)+1))
 }
 

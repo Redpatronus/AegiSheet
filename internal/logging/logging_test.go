@@ -185,21 +185,27 @@ func TestSanitizePath(t *testing.T) {
 }
 
 func TestParseLevel(t *testing.T) {
-	for input, want := range map[string]slog.Level{
-		"debug":   slog.LevelDebug,
-		"INFO":    slog.LevelInfo,
-		"":        slog.LevelInfo,
-		" warn ":  slog.LevelWarn,
-		"warning": slog.LevelWarn,
-		"error":   slog.LevelError,
-	} {
-		got, err := ParseLevel(input)
+	// Levels arrive from an INI file or an environment variable, so surrounding
+	// whitespace and arbitrary casing have to be tolerated.
+	tests := []struct {
+		in   string
+		want slog.Level
+	}{
+		{in: "debug", want: slog.LevelDebug},
+		{in: "INFO", want: slog.LevelInfo},
+		{in: "", want: slog.LevelInfo},
+		{in: " warn ", want: slog.LevelWarn},
+		{in: "warning", want: slog.LevelWarn},
+		{in: "error", want: slog.LevelError},
+	}
+	for _, test := range tests {
+		got, err := ParseLevel(test.in)
 		if err != nil {
-			t.Errorf("ParseLevel(%q): %v", input, err)
+			t.Errorf("ParseLevel(%q): %v", test.in, err)
 			continue
 		}
-		if got != want {
-			t.Errorf("ParseLevel(%q) = %v, want %v", input, got, want)
+		if got != test.want {
+			t.Errorf("ParseLevel(%q) = %v, want %v", test.in, got, test.want)
 		}
 	}
 
