@@ -1,7 +1,8 @@
 # AegiSheet
 
 [![Go](https://github.com/Redpatronus/AegiSheet/actions/workflows/go.yml/badge.svg)](https://github.com/Redpatronus/AegiSheet/actions/workflows/go.yml)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Foccu-io%2Fgsreport.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Foccu-io%2Fgsreport?ref=badge_shield)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FRedpatronus%2FAegiSheet.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2FRedpatronus%2FAegiSheet?ref=badge_shield&issueType=license)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FRedpatronus%2FAegiSheet.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2FRedpatronus%2FAegiSheet?ref=badge_shield&issueType=security)
 
 Google Workspace administrative reporting. AegiSheet reads the Admin SDK
 (Directory and Reports) and writes an Excel workbook with one worksheet per
@@ -344,4 +345,4 @@ knowing about:
 
 ## License
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Foccu-io%2Fgsreport.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Foccu-io%2Fgsreport?ref=badge_large)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FRedpatronus%2FAegiSheet.svg?type=large&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2FRedpatronus%2FAegiSheet?ref=badge_large&issueType=license)
