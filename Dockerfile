@@ -32,7 +32,7 @@
 # predictable. This is deliberately ahead of the floor declared in go.mod: the
 # floor is the oldest toolchain that is safe to build with, not the one a release
 # artefact should be built with.
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 
 # Build metadata, injected at link time so the running container can identify
 # exactly which commit produced it.
