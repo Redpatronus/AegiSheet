@@ -8,11 +8,11 @@ module github.com/Redpatronus/AegiSheet
 // (net/textproto). Declaring the patch here means `go build` either uses a fixed
 // toolchain or fetches one, instead of quietly producing a vulnerable binary.
 // Raise this floor whenever govulncheck reports a new standard library advisory.
-go 1.25.12
+go 1.26.0
 
 require (
 	github.com/xuri/excelize/v2 v2.11.0
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 	google.golang.org/api v0.291.0
 	gopkg.in/ini.v1 v1.67.3
 )
